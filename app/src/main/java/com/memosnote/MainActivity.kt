@@ -13,6 +13,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -55,14 +56,27 @@ class MainActivity : ComponentActivity() {
         setContent {
             val context = LocalContext.current
             val prefs = context.getSharedPreferences("memos_prefs", Context.MODE_PRIVATE)
-            var isDark by remember { mutableStateOf(prefs.getBoolean("dark_theme", false)) }
+            var followSystem by remember { mutableStateOf(prefs.getBoolean("follow_system", true)) }
+            var manualDark by remember { mutableStateOf(prefs.getBoolean("manual_dark", false)) }
+            val systemDark = isSystemInDarkTheme()
+            val isDark = if (followSystem) systemDark else manualDark
 
             MemosNoteTheme(darkTheme = isDark) {
                 MemosNoteApp(
                     isDark = isDark,
                     onToggleTheme = {
-                        isDark = !isDark
-                        prefs.edit().putBoolean("dark_theme", isDark).apply()
+                        if (followSystem) {
+                            followSystem = false
+                            manualDark = !systemDark
+                        } else if (manualDark == systemDark) {
+                            followSystem = true
+                        } else {
+                            manualDark = !manualDark
+                        }
+                        prefs.edit()
+                            .putBoolean("follow_system", followSystem)
+                            .putBoolean("manual_dark", manualDark)
+                            .apply()
                     }
                 )
             }
