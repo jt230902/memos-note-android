@@ -11,7 +11,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -66,15 +65,11 @@ class MainActivity : ComponentActivity() {
             var manualDark by remember { mutableStateOf(prefs.getBoolean("manual_dark", false)) }
             val isDark = if (followSystem) isSystemInDarkTheme() else manualDark
 
-            // 同步状态栏图标颜色 + 强制窗口重绘，消除主题切换时的视觉残留
+            // 同步状态栏图标颜色（深色背景用浅色图标，浅色背景用深色图标）
             SideEffect {
                 val window = (context as ComponentActivity).window
                 WindowCompat.getInsetsController(window, window.decorView).apply {
                     isAppearanceLightStatusBars = !isDark
-                }
-                // 强制整个窗口重绘，消除输入框等组件的颜色残留
-                window.decorView.post {
-                    window.decorView.invalidate()
                 }
             }
 
@@ -618,6 +613,7 @@ fun HistoryDialog(
 fun MemoInput(isDark: Boolean, onSubmit: (String) -> Unit, onFocus: () -> Unit = {}) {
     var content by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
+    var hadFocus by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
@@ -630,46 +626,58 @@ fun MemoInput(isDark: Boolean, onSubmit: (String) -> Unit, onFocus: () -> Unit =
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            val textFieldColors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                focusedContainerColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.03f),
-                unfocusedContainerColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.02f)
-            )
-
-            val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-            LaunchedEffect(interactionSource) {
-                interactionSource.interactions.collect { interaction ->
-                    if (interaction is androidx.compose.foundation.interaction.FocusInteraction.Focus) {
-                        onFocus()
+            // 在 key 外部追踪焦点状态，主题切换后用于恢复焦点
+            val focusTracker = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            LaunchedEffect(focusTracker) {
+                focusTracker.interactions.collect { interaction ->
+                    when (interaction) {
+                        is androidx.compose.foundation.interaction.FocusInteraction.Focus -> {
+                            hadFocus = true
+                            onFocus()
+                        }
+                        is androidx.compose.foundation.interaction.FocusInteraction.Unfocus -> hadFocus = false
                     }
                 }
             }
 
-            OutlinedTextField(
-                value = content,
-                onValueChange = { content = it },
-                placeholder = {
-                    Text(
-                        "写点什么...",
-                        color = MaterialTheme.colorScheme.tertiary,
-                        fontSize = 14.sp
-                    )
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 56.dp, max = 160.dp)
-                    .focusRequester(focusRequester),
-                textStyle = androidx.compose.ui.text.TextStyle(
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                ),
-                // ✅ 主题切换时 shape 对象变化，强制边框重新绘制，消除颜色残留
-                shape = RoundedCornerShape(if (isDark) 8.dp else 8.001.dp),
-                colors = textFieldColors,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
-                interactionSource = interactionSource
-            )
+            // ✅ key(isDark) 强制 OutlinedTextField 在主题切换时重新创建，消除边框颜色残留
+            key(isDark) {
+                OutlinedTextField(
+                    value = content,
+                    onValueChange = { content = it },
+                    placeholder = {
+                        Text(
+                            "写点什么...",
+                            color = MaterialTheme.colorScheme.tertiary,
+                            fontSize = 14.sp
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp, max = 160.dp)
+                        .focusRequester(focusRequester),
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    ),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                        focusedContainerColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.03f),
+                        unfocusedContainerColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.02f)
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
+                    interactionSource = focusTracker
+                )
+            }
+
+            // 主题切换后，如果之前输入框有焦点，重新请求焦点
+            LaunchedEffect(isDark) {
+                if (hadFocus) {
+                    focusRequester.requestFocus()
+                }
+            }
             Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -865,8 +873,7 @@ fun MemoCardContent(
     var isExpanded by remember { mutableStateOf(false) }
     val uriHandler = LocalUriHandler.current
 
-    val isLong = memo.content.split("
-").size > 7 || memo.content.length > 400
+    val isLong = memo.content.split("\n").size > 7 || memo.content.length > 400
 
     Column(modifier = Modifier.padding(14.dp)) {
         Row(
@@ -894,8 +901,7 @@ fun MemoCardContent(
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurface
                 ),
-                // ✅ 主题切换时 shape 对象变化，强制边框重新绘制，消除颜色残留
-                shape = RoundedCornerShape(if (isDark) 8.dp else 8.001.dp),
+                shape = RoundedCornerShape(8.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = MaterialTheme.colorScheme.primary,
                     unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
@@ -934,8 +940,7 @@ fun MemoCardContent(
             }
         } else {
             val displayContent = if (!isExpanded && isLong) {
-                val lines = memo.content.split("
-")
+                val lines = memo.content.split("\n")
                 if (lines.size > 7) lines.take(7).joinToString("\n") + "..."
                 else if (memo.content.length > 400) memo.content.take(400) + "..."
                 else memo.content
