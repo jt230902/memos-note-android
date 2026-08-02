@@ -625,42 +625,45 @@ fun MemoInput(isDark: Boolean, onSubmit: (String) -> Unit, onFocus: () -> Unit =
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            OutlinedTextField(
-                value = content,
-                onValueChange = { content = it },
-                placeholder = {
-                    Text(
-                        "写点什么...",
-                        color = MaterialTheme.colorScheme.tertiary,
-                        fontSize = 14.sp
-                    )
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 56.dp, max = 160.dp)
-                    .focusRequester(focusRequester),
-                textStyle = androidx.compose.ui.text.TextStyle(
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                ),
-                shape = RoundedCornerShape(8.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                    focusedContainerColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.03f),
-                    unfocusedContainerColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.02f)
-                ),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
-                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }.also { interactionSource ->
-                    LaunchedEffect(interactionSource) {
-                        interactionSource.interactions.collect { interaction ->
-                            if (interaction is androidx.compose.foundation.interaction.FocusInteraction.Focus) {
-                                onFocus()
+            // ✅ key(isDark) 强制 OutlinedTextField 在主题切换时重新创建，消除边框颜色残留
+            key(isDark) {
+                OutlinedTextField(
+                    value = content,
+                    onValueChange = { content = it },
+                    placeholder = {
+                        Text(
+                            "写点什么...",
+                            color = MaterialTheme.colorScheme.tertiary,
+                            fontSize = 14.sp
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp, max = 160.dp)
+                        .focusRequester(focusRequester),
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    ),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                        focusedContainerColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.03f),
+                        unfocusedContainerColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.02f)
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }.also { interactionSource ->
+                        LaunchedEffect(interactionSource) {
+                            interactionSource.interactions.collect { interaction ->
+                                if (interaction is androidx.compose.foundation.interaction.FocusInteraction.Focus) {
+                                    onFocus()
+                                }
                             }
                         }
                     }
-                }
-            )
+                )
+            }
             Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
