@@ -63,6 +63,7 @@ class MainActivity : ComponentActivity() {
             val prefs = context.getSharedPreferences("memos_prefs", Context.MODE_PRIVATE)
             var followSystem by remember { mutableStateOf(prefs.getBoolean("follow_system", true)) }
             var manualDark by remember { mutableStateOf(prefs.getBoolean("manual_dark", false)) }
+            // 修复：直接使用 isSystemInDarkTheme()，让 Compose 持续监听系统主题变化
             val isDark = if (followSystem) isSystemInDarkTheme() else manualDark
 
             MemosNoteTheme(darkTheme = isDark) {
@@ -77,6 +78,7 @@ class MainActivity : ComponentActivity() {
                 MemosNoteApp(
                     isDark = isDark,
                     onToggleTheme = {
+                        // 在非 Composable lambda 中使用 resources.configuration 获取系统主题
                         val currentSystemDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
                         if (followSystem) {
                             followSystem = false
@@ -181,19 +183,31 @@ fun MemosNoteApp(isDark: Boolean, onToggleTheme: () -> Unit) {
     }
 
     Scaffold(
-    modifier = Modifier.fillMaxSize(),
-    // ✅ 关键：禁用 Scaffold 自动处理系统栏 insets，避免和 TopAppBar 的 statusBarsPadding() 冲突
-    contentWindowInsets = WindowInsets(0, 0, 0, 0),
-    containerColor = MaterialTheme.colorScheme.background,
-    topBar = {
-        AppTopBar(...)
-    }
-) { padding ->
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(padding)
-    ) {
+        modifier = Modifier.fillMaxSize(),
+        // 关键：禁用 Scaffold 自动处理系统栏 insets，避免和 TopAppBar 的 statusBarsPadding() 冲突
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            AppTopBar(
+                isDark = isDark,
+                isSearchOpen = isSearchOpen,
+                searchQuery = searchQuery,
+                currentFileName = currentFileName,
+                onToggleTheme = onToggleTheme,
+                onToggleSearch = {
+                    isSearchOpen = !isSearchOpen
+                    if (!isSearchOpen) searchQuery = ""
+                },
+                onSearchQueryChange = { searchQuery = it },
+                onShowFileMenu = { showFileMenu = true }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
             MemoInput(
                 isDark = isDark,
                 onSubmit = { content ->
