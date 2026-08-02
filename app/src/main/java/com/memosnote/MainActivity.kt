@@ -66,19 +66,11 @@ class MainActivity : ComponentActivity() {
 
             // 同步状态栏和导航栏图标颜色（手动切换主题时状态栏跟随变化）
             SideEffect {
-    val window = (view.context as ComponentActivity).window
-    val controller = WindowCompat.getInsetsController(window, view)
-    
-    // ✅ 状态栏背景色跟随应用主题
-    window.statusBarColor = if (isDark) 
-        android.graphics.Color.parseColor("#FF1C1B1F")  // 深色背景
-    else 
-        android.graphics.Color.parseColor("#FFF5F2EE")  // 浅色背景
-    
-    // ✅ 状态栏图标颜色（深色背景用浅色图标，浅色背景用深色图标）
-    controller.isAppearanceLightStatusBars = !isDark
-    controller.isAppearanceLightNavigationBars = !isDark
-}
+                val window = (view.context as ComponentActivity).window
+                WindowCompat.getInsetsController(window, view).apply {
+                    isAppearanceLightStatusBars = !isDark
+                    isAppearanceLightNavigationBars = !isDark
+                }
             }
 
             MemosNoteTheme(darkTheme = isDark) {
