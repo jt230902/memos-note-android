@@ -35,10 +35,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,27 +54,21 @@ import kotlin.math.roundToInt
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 开启 Edge-to-Edge 模式，让应用内容延伸到状态栏下方
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         setContent {
             val context = LocalContext.current
-            val view = LocalView.current
             val prefs = context.getSharedPreferences("memos_prefs", Context.MODE_PRIVATE)
             var followSystem by remember { mutableStateOf(prefs.getBoolean("follow_system", true)) }
             var manualDark by remember { mutableStateOf(prefs.getBoolean("manual_dark", false)) }
+            // 修复：直接使用 isSystemInDarkTheme()，让 Compose 持续监听系统主题变化
             val isDark = if (followSystem) isSystemInDarkTheme() else manualDark
-
-            // 同步状态栏和导航栏图标颜色（手动切换主题时状态栏跟随变化）
-            SideEffect {
-                val window = (view.context as ComponentActivity).window
-                WindowCompat.getInsetsController(window, view).apply {
-                    isAppearanceLightStatusBars = !isDark
-                    isAppearanceLightNavigationBars = !isDark
-                }
-            }
 
             MemosNoteTheme(darkTheme = isDark) {
                 MemosNoteApp(
                     isDark = isDark,
                     onToggleTheme = {
+                        // 在非 Composable lambda 中使用 resources.configuration 获取系统主题
                         val currentSystemDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
                         if (followSystem) {
                             followSystem = false
@@ -362,6 +354,8 @@ fun AppTopBar(
     }
 
     TopAppBar(
+        // 修复：让 TopAppBar 延伸到状态栏下方，状态栏背景色自然跟随主题
+        modifier = Modifier.statusBarsPadding(),
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.background
         ),
