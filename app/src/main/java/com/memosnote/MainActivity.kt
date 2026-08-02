@@ -2,6 +2,7 @@ package com.memosnote
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -34,7 +35,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
@@ -54,23 +54,20 @@ import kotlin.math.roundToInt
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // ✅ Edge-to-Edge：让内容延伸到系统栏下方
+        // 开启 Edge-to-Edge，内容延伸到系统栏下方
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        // ✅ 状态栏设为透明，让 TopAppBar 的背景色透过来
+        // 状态栏透明，让下方内容透上来
         window.statusBarColor = android.graphics.Color.TRANSPARENT
-
         setContent {
             val context = LocalContext.current
             val prefs = context.getSharedPreferences("memos_prefs", Context.MODE_PRIVATE)
             var followSystem by remember { mutableStateOf(prefs.getBoolean("follow_system", true)) }
             var manualDark by remember { mutableStateOf(prefs.getBoolean("manual_dark", false)) }
-
-            // ✅ 修复：直接使用 isSystemInDarkTheme()，不先赋值给普通 val
             val isDark = if (followSystem) isSystemInDarkTheme() else manualDark
 
-            // ✅ 控制状态栏图标颜色（亮色/暗色）
+            // 同步状态栏图标颜色（深色背景用浅色图标，浅色背景用深色图标）
             SideEffect {
+                val window = (context as ComponentActivity).window
                 WindowCompat.getInsetsController(window, window.decorView).apply {
                     isAppearanceLightStatusBars = !isDark
                 }
@@ -80,10 +77,11 @@ class MainActivity : ComponentActivity() {
                 MemosNoteApp(
                     isDark = isDark,
                     onToggleTheme = {
+                        val currentSystemDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
                         if (followSystem) {
                             followSystem = false
-                            manualDark = !isSystemInDarkTheme()
-                        } else if (manualDark == isSystemInDarkTheme()) {
+                            manualDark = !currentSystemDark
+                        } else if (manualDark == currentSystemDark) {
                             followSystem = true
                         } else {
                             manualDark = !manualDark
@@ -117,24 +115,19 @@ fun MemosNoteApp(isDark: Boolean, onToggleTheme: () -> Unit) {
     var memoToDelete by remember { mutableStateOf<Memo?>(null) }
     var editingMemoId by remember { mutableStateOf<String?>(null) }
     val listState = rememberLazyListState()
-
-    // 用于触发滚动到顶部的状态
     var scrollToTopTrigger by remember { mutableStateOf(0) }
 
-    // 滚动到顶部的效果
     LaunchedEffect(scrollToTopTrigger) {
         if (scrollToTopTrigger > 0) {
             listState.animateScrollToItem(0)
         }
     }
 
-    // 加载笔记
     fun loadMemosFromCurrentFile() {
         memos = repository.loadMemos()
         currentFileName = repository.getCurrentFileName()
     }
 
-    // 首次加载 - 检查是否需要初始化引导
     LaunchedEffect(Unit) {
         if (repository.hasCurrentFile()) {
             loadMemosFromCurrentFile()
@@ -152,7 +145,7 @@ fun MemosNoteApp(isDark: Boolean, onToggleTheme: () -> Unit) {
         memos = newMemos
         repository.saveMemos(newMemos)
         if (scrollToTop) {
-            scrollToTopTrigger++ // 只有新增时才触发滚动到顶部
+            scrollToTopTrigger++
         }
     }
 
@@ -163,7 +156,6 @@ fun MemosNoteApp(isDark: Boolean, onToggleTheme: () -> Unit) {
         loadMemosFromCurrentFile()
     }
 
-    // 文件选择器
     val filePickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -176,7 +168,6 @@ fun MemosNoteApp(isDark: Boolean, onToggleTheme: () -> Unit) {
         }
     }
 
-    // 创建新文件
     val createFileLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("text/markdown")
     ) { uri ->
@@ -191,7 +182,6 @@ fun MemosNoteApp(isDark: Boolean, onToggleTheme: () -> Unit) {
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        // ✅ 关键：禁用 Scaffold 自动处理系统栏 insets，避免和 TopAppBar 冲突
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -215,7 +205,6 @@ fun MemosNoteApp(isDark: Boolean, onToggleTheme: () -> Unit) {
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Memo Input
             MemoInput(
                 isDark = isDark,
                 onSubmit = { content ->
@@ -234,7 +223,6 @@ fun MemosNoteApp(isDark: Boolean, onToggleTheme: () -> Unit) {
                 }
             )
 
-            // Memo List
             if (filteredMemos.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -256,7 +244,6 @@ fun MemosNoteApp(isDark: Boolean, onToggleTheme: () -> Unit) {
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     itemsIndexed(filteredMemos, key = { _, memo -> memo.id }) { index, memo ->
-                        // 确保相邻卡片颜色不同：基于索引循环选择，避开与前一个相同
                         val colorIndex = index % 10
                         SwipeableMemoCard(
                             memo = memo,
@@ -284,7 +271,6 @@ fun MemosNoteApp(isDark: Boolean, onToggleTheme: () -> Unit) {
         }
     }
 
-    // 删除确认对话框
     memoToDelete?.let { memo ->
         AlertDialog(
             onDismissRequest = { memoToDelete = null },
@@ -297,10 +283,7 @@ fun MemosNoteApp(isDark: Boolean, onToggleTheme: () -> Unit) {
                         memoToDelete = null
                     }
                 ) {
-                    Text(
-                        "删除",
-                        color = MaterialTheme.colorScheme.error
-                    )
+                    Text("删除", color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
@@ -311,7 +294,6 @@ fun MemosNoteApp(isDark: Boolean, onToggleTheme: () -> Unit) {
         )
     }
 
-    // 文件菜单
     if (showFileMenu) {
         FileMenuDialog(
             onDismiss = { showFileMenu = false },
@@ -330,7 +312,6 @@ fun MemosNoteApp(isDark: Boolean, onToggleTheme: () -> Unit) {
         )
     }
 
-    // 历史文件对话框
     if (showHistoryDialog) {
         HistoryDialog(
             fileHistoryManager = fileHistoryManager,
@@ -347,7 +328,6 @@ fun MemosNoteApp(isDark: Boolean, onToggleTheme: () -> Unit) {
         )
     }
 
-    // 初始化引导对话框
     if (showInitDialog) {
         InitFileDialog(
             onDismiss = { showInitDialog = false },
@@ -376,108 +356,117 @@ fun AppTopBar(
     onShowFileMenu: () -> Unit,
     focusRequester: FocusRequester = remember { FocusRequester() }
 ) {
-    // 搜索打开时自动聚焦
     LaunchedEffect(isSearchOpen) {
         if (isSearchOpen) {
-            kotlinx.coroutines.delay(100) // 等待动画完成
+            kotlinx.coroutines.delay(100)
             focusRequester.requestFocus()
         }
     }
 
-    TopAppBar(
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.background
-        ),
-        title = {
-            if (isSearchOpen) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = onSearchQueryChange,
-                    placeholder = { Text("搜索笔记...", fontSize = 14.sp) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                        .focusRequester(focusRequester),
-                    singleLine = true,
-                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                    ),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    trailingIcon = {
-                        if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { onSearchQueryChange("") }) {
-                                Icon(
-                                    Icons.Default.Clear,
-                                    contentDescription = "Clear",
-                                    modifier = Modifier.size(18.dp)
-                                )
+    // ✅ 关键修复：用 Box 包裹 TopAppBar，由 Box 提供背景色并处理 statusBarsPadding
+    // Box 的 background 会覆盖整个 bounds（包括 padding 区域），消除状态栏下方的视觉残留
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding()
+    ) {
+        TopAppBar(
+            modifier = Modifier.fillMaxWidth(),
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = Color.Transparent  // 背景由外部 Box 统一提供
+            ),
+            title = {
+                if (isSearchOpen) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = onSearchQueryChange,
+                        placeholder = { Text("搜索笔记...", fontSize = 14.sp) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .focusRequester(focusRequester),
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                        ),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { onSearchQueryChange("") }) {
+                                    Icon(
+                                        Icons.Default.Clear,
+                                        contentDescription = "Clear",
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
                             }
                         }
-                    }
-                )
-            } else {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.primary),
-                            contentAlignment = Alignment.Center
-                        ) {
+                    )
+                } else {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.primary),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    "M",
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                "M",
-                                color = Color.White,
-                                fontSize = 16.sp,
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                "Memos Note",
+                                fontSize = 18.sp,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onBackground
                             )
                         }
-                        Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            "Memos Note",
-                            fontSize = 18.sp,
-                            fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onBackground
+                            text = currentFileName,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(start = 42.dp)
                         )
                     }
-                    Text(
-                        text = currentFileName,
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.tertiary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(start = 42.dp)
+                }
+            },
+            actions = {
+                IconButton(onClick = onShowFileMenu) {
+                    Icon(
+                        Icons.Default.Folder,
+                        contentDescription = "文件",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onToggleSearch) {
+                    Icon(
+                        if (isSearchOpen) Icons.Default.Close else Icons.Default.Search,
+                        contentDescription = "Search",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onToggleTheme) {
+                    Icon(
+                        if (isDark) Icons.Outlined.LightMode else Icons.Outlined.DarkMode,
+                        contentDescription = "Theme",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
-        },
-        actions = {
-            IconButton(onClick = onShowFileMenu) {
-                Icon(
-                    Icons.Default.Folder,
-                    contentDescription = "文件",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            IconButton(onClick = onToggleSearch) {
-                Icon(
-                    if (isSearchOpen) Icons.Default.Close else Icons.Default.Search,
-                    contentDescription = "Search",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            IconButton(onClick = onToggleTheme) {
-                Icon(
-                    if (isDark) Icons.Outlined.LightMode else Icons.Outlined.DarkMode,
-                    contentDescription = "Theme",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    )
+        )
+    }
 }
 
 @Composable
@@ -522,7 +511,7 @@ fun InitFileDialog(
     onCreateFile: () -> Unit
 ) {
     AlertDialog(
-        onDismissRequest = { /* 不允许点击外部关闭 */ },
+        onDismissRequest = { },
         title = { Text("欢迎使用 Memos Note") },
         text = {
             Column {
@@ -719,17 +708,15 @@ fun SwipeableMemoCard(
     onTagClick: (String) -> Unit
 ) {
     var offsetX by remember { mutableStateOf(0f) }
-    var initialDirection by remember { mutableStateOf(0) } // 0: 未开始, 1: 右滑, -1: 左滑
+    var initialDirection by remember { mutableStateOf(0) }
     var hasChangedDirection by remember { mutableStateOf(false) }
 
     val cardColors = if (isDark) CardColorsDark else CardColorsLight
     val cardColor = cardColors[colorIndex % cardColors.size]
 
-    // 滑动阈值
     val swipeThreshold = 80f
     val actionThreshold = 150f
 
-    // 动画回到原位
     val animatedOffset by animateFloatAsState(
         targetValue = offsetX,
         animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
@@ -741,20 +728,18 @@ fun SwipeableMemoCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
     ) {
-        // 背景层 - 使用 Box + matchParentSize 确保与前景层高度一致
         Box(
             modifier = Modifier
                 .matchParentSize()
                 .background(
                     when {
-                        hasChangedDirection -> Color(0xFF9E9E9E) // 方向改变时显示灰色（取消）
+                        hasChangedDirection -> Color(0xFF9E9E9E)
                         offsetX > swipeThreshold -> Color(0xFF4CAF50)
                         offsetX < -swipeThreshold -> MaterialTheme.colorScheme.error
                         else -> Color.Transparent
                     }
                 )
         ) {
-            // 显示当前状态的图标
             when {
                 hasChangedDirection -> {
                     Icon(
@@ -791,7 +776,6 @@ fun SwipeableMemoCard(
             }
         }
 
-        // 前景层 - 卡片内容
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -799,14 +783,12 @@ fun SwipeableMemoCard(
                 .pointerInput(Unit) {
                     detectHorizontalDragGestures(
                         onDragStart = {
-                            // 重置状态
                             initialDirection = 0
                             hasChangedDirection = false
                         },
                         onDragEnd = {
                             when {
                                 hasChangedDirection -> {
-                                    // 方向改变了，取消操作
                                     offsetX = 0f
                                 }
                                 offsetX > actionThreshold -> {
@@ -828,12 +810,9 @@ fun SwipeableMemoCard(
                             change.consume()
                             val newOffset = (offsetX + dragAmount).coerceIn(-200f, 200f)
 
-                            // 检测方向变化
                             if (initialDirection == 0 && abs(newOffset) > 20f) {
-                                // 记录初始方向
                                 initialDirection = if (newOffset > 0) 1 else -1
                             } else if (initialDirection != 0 && !hasChangedDirection) {
-                                // 检查是否改变了方向（跨过了中心点）
                                 if (initialDirection == 1 && newOffset < -20f) {
                                     hasChangedDirection = true
                                 } else if (initialDirection == -1 && newOffset > 20f) {
@@ -880,7 +859,6 @@ fun MemoCardContent(
     val isLong = memo.content.split("\n").size > 7 || memo.content.length > 400
 
     Column(modifier = Modifier.padding(14.dp)) {
-        // Header: date
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -896,7 +874,6 @@ fun MemoCardContent(
         Spacer(modifier = Modifier.height(8.dp))
 
         if (isEditing) {
-            // Edit mode
             OutlinedTextField(
                 value = editContent,
                 onValueChange = { editContent = it },
@@ -916,7 +893,6 @@ fun MemoCardContent(
                 )
             )
             Spacer(modifier = Modifier.height(10.dp))
-            // 修复：按钮在同一行
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
@@ -946,7 +922,6 @@ fun MemoCardContent(
                 }
             }
         } else {
-            // View mode - rendered markdown
             val displayContent = if (!isExpanded && isLong) {
                 val lines = memo.content.split("\n")
                 if (lines.size > 7) lines.take(7).joinToString("\n") + "..."
@@ -1061,7 +1036,6 @@ fun MemoCardContent(
                             }
                         }
                         line.headingLevel > 0 -> {
-                            // 标题渲染：根据级别设置不同字体大小
                             val headingFontSize = when (line.headingLevel) {
                                 1 -> 24.sp
                                 2 -> 22.sp
@@ -1109,7 +1083,6 @@ fun MemoCardContent(
                 }
             }
 
-            // Expand/Collapse button
             if (isLong) {
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
@@ -1138,10 +1111,6 @@ private fun handleTextClick(
     }
 }
 
-/**
- * 渲染带圆角标签的文本行
- * 解析 AnnotatedString 中的 tag 注释，将标签单独渲染为圆角样式
- */
 @Composable
 fun AnnotatedTextWithTags(
     text: AnnotatedString,
@@ -1155,12 +1124,10 @@ fun AnnotatedTextWithTags(
     val urlAnnotations = text.getStringAnnotations("url", 0, text.length)
 
     if (tagAnnotations.isEmpty() && urlAnnotations.isEmpty()) {
-        // 没有标签或链接，直接渲染
         Text(text = text, style = style, modifier = modifier)
         return
     }
 
-    // 合并所有特殊区域并排序
     data class SpanInfo(val start: Int, val end: Int, val type: String, val value: String)
     val spans = mutableListOf<SpanInfo>()
     tagAnnotations.forEach { spans.add(SpanInfo(it.start, it.end, "tag", it.item)) }
@@ -1175,7 +1142,6 @@ fun AnnotatedTextWithTags(
     ) {
         var lastEnd = 0
         for (span in spans) {
-            // 渲染普通文本
             if (span.start > lastEnd) {
                 Text(
                     text = text.subSequence(lastEnd, span.start),
@@ -1184,7 +1150,6 @@ fun AnnotatedTextWithTags(
                 Spacer(modifier = Modifier.width(2.dp))
             }
 
-            // 渲染标签或链接
             when (span.type) {
                 "tag" -> {
                     val colorIdx = MarkdownRenderer.getTagColorIndex(span.value)
@@ -1219,7 +1184,6 @@ fun AnnotatedTextWithTags(
             lastEnd = span.end
         }
 
-        // 渲染剩余的普通文本
         if (lastEnd < text.length) {
             Text(
                 text = text.subSequence(lastEnd, text.length),
