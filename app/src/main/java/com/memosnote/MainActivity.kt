@@ -9,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.view.WindowCompat
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -61,6 +62,13 @@ class MainActivity : ComponentActivity() {
             var manualDark by remember { mutableStateOf(prefs.getBoolean("manual_dark", false)) }
             // Fix: use isSystemInDarkTheme() directly so Compose keeps listening
             val isDark = if (followSystem) isSystemInDarkTheme() else manualDark
+            // 同步状态栏和导航栏图标颜色（手动切换主题时状态栏跟随变化）
+SideEffect {
+    WindowCompat.getInsetsController(window, window.decorView).apply {
+        isAppearanceLightStatusBars = !isDark
+        isAppearanceLightNavigationBars = !isDark
+    }
+}
 
             MemosNoteTheme(darkTheme = isDark) {
                 MemosNoteApp(
