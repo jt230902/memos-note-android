@@ -65,11 +65,15 @@ class MainActivity : ComponentActivity() {
             var manualDark by remember { mutableStateOf(prefs.getBoolean("manual_dark", false)) }
             val isDark = if (followSystem) isSystemInDarkTheme() else manualDark
 
-            // 同步状态栏图标颜色（深色背景用浅色图标，浅色背景用深色图标）
+            // 同步状态栏图标颜色 + 强制窗口重绘，消除主题切换时的视觉残留
             SideEffect {
                 val window = (context as ComponentActivity).window
                 WindowCompat.getInsetsController(window, window.decorView).apply {
                     isAppearanceLightStatusBars = !isDark
+                }
+                // 强制整个窗口重绘，消除输入框等组件的颜色残留
+                window.decorView.post {
+                    window.decorView.invalidate()
                 }
             }
 
@@ -625,13 +629,23 @@ fun MemoInput(isDark: Boolean, onSubmit: (String) -> Unit, onFocus: () -> Unit =
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            // ✅ 直接创建颜色配置，确保主题切换时边框颜色立即刷新，且不丢失焦点
+            // ✅ 直接创建颜色配置
             val textFieldColors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = MaterialTheme.colorScheme.primary,
                 unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
                 focusedContainerColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.03f),
                 unfocusedContainerColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.02f)
             )
+
+            // ✅ interactionSource 随主题重建，触发内部状态刷新，消除边框颜色残留
+            val interactionSource = remember(isDark) { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            LaunchedEffect(interactionSource) {
+                interactionSource.interactions.collect { interaction ->
+                    if (interaction is androidx.compose.foundation.interaction.FocusInteraction.Focus) {
+                        onFocus()
+                    }
+                }
+            }
 
             OutlinedTextField(
                 value = content,
@@ -646,7 +660,9 @@ fun MemoInput(isDark: Boolean, onSubmit: (String) -> Unit, onFocus: () -> Unit =
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 56.dp, max = 160.dp)
-                    .focusRequester(focusRequester),
+                    .focusRequester(focusRequester)
+                    // ✅ 强制离屏缓冲渲染，每次重组完全重绘，消除绘制残留
+                    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen },
                 textStyle = androidx.compose.ui.text.TextStyle(
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurface
@@ -654,15 +670,7 @@ fun MemoInput(isDark: Boolean, onSubmit: (String) -> Unit, onFocus: () -> Unit =
                 shape = RoundedCornerShape(8.dp),
                 colors = textFieldColors,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
-                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }.also { interactionSource ->
-                    LaunchedEffect(interactionSource) {
-                        interactionSource.interactions.collect { interaction ->
-                            if (interaction is androidx.compose.foundation.interaction.FocusInteraction.Focus) {
-                                onFocus()
-                            }
-                        }
-                    }
-                }
+                interactionSource = interactionSource
             )
             Spacer(modifier = Modifier.height(8.dp))
             Row(
