@@ -181,29 +181,19 @@ fun MemosNoteApp(isDark: Boolean, onToggleTheme: () -> Unit) {
     }
 
     Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            AppTopBar(
-                isDark = isDark,
-                isSearchOpen = isSearchOpen,
-                searchQuery = searchQuery,
-                currentFileName = currentFileName,
-                onToggleTheme = onToggleTheme,
-                onToggleSearch = {
-                    isSearchOpen = !isSearchOpen
-                    if (!isSearchOpen) searchQuery = ""
-                },
-                onSearchQueryChange = { searchQuery = it },
-                onShowFileMenu = { showFileMenu = true }
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
+    modifier = Modifier.fillMaxSize(),
+    // ✅ 关键：禁用 Scaffold 自动处理系统栏 insets，避免和 TopAppBar 的 statusBarsPadding() 冲突
+    contentWindowInsets = WindowInsets(0, 0, 0, 0),
+    containerColor = MaterialTheme.colorScheme.background,
+    topBar = {
+        AppTopBar(...)
+    }
+) { padding ->
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(padding)
+    ) {
             MemoInput(
                 isDark = isDark,
                 onSubmit = { content ->
