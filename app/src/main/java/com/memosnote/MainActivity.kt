@@ -58,8 +58,7 @@ class MainActivity : ComponentActivity() {
             val prefs = context.getSharedPreferences("memos_prefs", Context.MODE_PRIVATE)
             var followSystem by remember { mutableStateOf(prefs.getBoolean("follow_system", true)) }
             var manualDark by remember { mutableStateOf(prefs.getBoolean("manual_dark", false)) }
-            val systemDark = isSystemInDarkTheme()
-            val isDark = if (followSystem) systemDark else manualDark
+            val isDark = if (followSystem) isSystemInDarkTheme() else manualDark
 
             MemosNoteTheme(darkTheme = isDark) {
                 MemosNoteApp(
@@ -67,8 +66,8 @@ class MainActivity : ComponentActivity() {
                     onToggleTheme = {
                         if (followSystem) {
                             followSystem = false
-                            manualDark = !systemDark
-                        } else if (manualDark == systemDark) {
+                            manualDark = !isSystemInDarkTheme()
+                        } else if (manualDark == isSystemInDarkTheme()) {
                             followSystem = true
                         } else {
                             manualDark = !manualDark
