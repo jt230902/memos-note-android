@@ -10,15 +10,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+
       - uses: android-actions/setup-android@v3
+
       - run: yes | sdkmanager --licenses || true
+
+      # 生成临时签名密钥（Release 版需要签名）
+      - name: Generate signing keystore
+        run: |
+          keytool -genkey -v             -keystore app/release-key.jks             -alias memosnote             -keyalg RSA             -keysize 2048             -validity 10000             -storepass memosnote             -keypass memosnote             -dname "CN=memosnote"
+
       - run: chmod +x gradlew
-      - run: ./gradlew assembleDebug
+
+      # 编译 Release 版（体积更小，会启用代码压缩和资源压缩）
+      - run: ./gradlew assembleRelease
+
       - uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: app-release
+          path: app/build/outputs/apk/release/app-release.apk
