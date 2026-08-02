@@ -661,8 +661,8 @@ fun MemoInput(isDark: Boolean, onSubmit: (String) -> Unit, onFocus: () -> Unit =
                     .fillMaxWidth()
                     .heightIn(min = 56.dp, max = 160.dp)
                     .focusRequester(focusRequester)
-                    // ✅ 强制离屏缓冲渲染，每次重组完全重绘，消除绘制残留
-                    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen },
+                    // ✅ 强制自定义绘制，消除主题切换时的颜色残留
+                    .drawWithContent { drawContent() },
                 textStyle = androidx.compose.ui.text.TextStyle(
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurface
@@ -867,7 +867,8 @@ fun MemoCardContent(
     var isExpanded by remember { mutableStateOf(false) }
     val uriHandler = LocalUriHandler.current
 
-    val isLong = memo.content.split("\n").size > 7 || memo.content.length > 400
+    val isLong = memo.content.split("
+").size > 7 || memo.content.length > 400
 
     Column(modifier = Modifier.padding(14.dp)) {
         Row(
@@ -934,7 +935,8 @@ fun MemoCardContent(
             }
         } else {
             val displayContent = if (!isExpanded && isLong) {
-                val lines = memo.content.split("\n")
+                val lines = memo.content.split("
+")
                 if (lines.size > 7) lines.take(7).joinToString("\n") + "..."
                 else if (memo.content.length > 400) memo.content.take(400) + "..."
                 else memo.content
