@@ -9,7 +9,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.view.WindowCompat
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -39,12 +38,14 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 import com.memosnote.data.*
 import com.memosnote.ui.theme.*
 import com.memosnote.util.MarkdownRenderer
@@ -57,24 +58,25 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             val context = LocalContext.current
+            val view = LocalView.current
             val prefs = context.getSharedPreferences("memos_prefs", Context.MODE_PRIVATE)
             var followSystem by remember { mutableStateOf(prefs.getBoolean("follow_system", true)) }
             var manualDark by remember { mutableStateOf(prefs.getBoolean("manual_dark", false)) }
-            // Fix: use isSystemInDarkTheme() directly so Compose keeps listening
             val isDark = if (followSystem) isSystemInDarkTheme() else manualDark
+
             // 同步状态栏和导航栏图标颜色（手动切换主题时状态栏跟随变化）
-SideEffect {
-    WindowCompat.getInsetsController(window, window.decorView).apply {
-        isAppearanceLightStatusBars = !isDark
-        isAppearanceLightNavigationBars = !isDark
-    }
-}
+            SideEffect {
+                val window = (view.context as ComponentActivity).window
+                WindowCompat.getInsetsController(window, view).apply {
+                    isAppearanceLightStatusBars = !isDark
+                    isAppearanceLightNavigationBars = !isDark
+                }
+            }
 
             MemosNoteTheme(darkTheme = isDark) {
                 MemosNoteApp(
                     isDark = isDark,
                     onToggleTheme = {
-                        // Fix: use resources.configuration in non-Composable lambda
                         val currentSystemDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
                         if (followSystem) {
                             followSystem = false
