@@ -54,21 +54,29 @@ import kotlin.math.roundToInt
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // 开启 Edge-to-Edge 模式，让应用内容延伸到状态栏下方
+        // 开启 Edge-to-Edge 模式，让应用内容延伸到系统栏下方
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        // 强制状态栏背景透明（关键：只有透明，TopAppBar 背景色才能"透"上来）
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
         setContent {
             val context = LocalContext.current
             val prefs = context.getSharedPreferences("memos_prefs", Context.MODE_PRIVATE)
             var followSystem by remember { mutableStateOf(prefs.getBoolean("follow_system", true)) }
             var manualDark by remember { mutableStateOf(prefs.getBoolean("manual_dark", false)) }
-            // 修复：直接使用 isSystemInDarkTheme()，让 Compose 持续监听系统主题变化
             val isDark = if (followSystem) isSystemInDarkTheme() else manualDark
 
             MemosNoteTheme(darkTheme = isDark) {
+                // 只控制状态栏图标颜色，背景色由透明 + TopAppBar 背景色决定
+                SideEffect {
+                    val window = (context as ComponentActivity).window
+                    WindowCompat.getInsetsController(window, window.decorView).apply {
+                        isAppearanceLightStatusBars = !isDark
+                    }
+                }
+
                 MemosNoteApp(
                     isDark = isDark,
                     onToggleTheme = {
-                        // 在非 Composable lambda 中使用 resources.configuration 获取系统主题
                         val currentSystemDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
                         if (followSystem) {
                             followSystem = false
@@ -354,7 +362,7 @@ fun AppTopBar(
     }
 
     TopAppBar(
-        // 修复：让 TopAppBar 延伸到状态栏下方，状态栏背景色自然跟随主题
+        // 关键：让 TopAppBar 延伸到状态栏区域，背景色自然填充状态栏
         modifier = Modifier.statusBarsPadding(),
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.background
