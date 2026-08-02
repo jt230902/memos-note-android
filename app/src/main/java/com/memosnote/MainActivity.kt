@@ -34,7 +34,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -647,13 +646,6 @@ fun MemoInput(isDark: Boolean, onSubmit: (String) -> Unit, onFocus: () -> Unit =
                 }
             }
 
-            // ✅ Alpha 微闪烁强制重绘：主题切换时 1f -> 0.97f -> 1f（60ms），消除边框颜色残留，不丢失焦点
-            val flashAlpha = remember { Animatable(1f) }
-            LaunchedEffect(isDark) {
-                flashAlpha.animateTo(0.97f, animationSpec = tween(30))
-                flashAlpha.animateTo(1f, animationSpec = tween(30))
-            }
-
             OutlinedTextField(
                 value = content,
                 onValueChange = { content = it },
@@ -667,13 +659,13 @@ fun MemoInput(isDark: Boolean, onSubmit: (String) -> Unit, onFocus: () -> Unit =
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 56.dp, max = 160.dp)
-                    .focusRequester(focusRequester)
-                    .alpha(flashAlpha.value),
+                    .focusRequester(focusRequester),
                 textStyle = androidx.compose.ui.text.TextStyle(
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurface
                 ),
-                shape = RoundedCornerShape(8.dp),
+                // ✅ 主题切换时 shape 对象变化，强制边框重新绘制，消除颜色残留
+                shape = RoundedCornerShape(if (isDark) 8.dp else 8.001.dp),
                 colors = textFieldColors,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
                 interactionSource = interactionSource
@@ -902,7 +894,8 @@ fun MemoCardContent(
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurface
                 ),
-                shape = RoundedCornerShape(8.dp),
+                // ✅ 主题切换时 shape 对象变化，强制边框重新绘制，消除颜色残留
+                shape = RoundedCornerShape(if (isDark) 8.dp else 8.001.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = MaterialTheme.colorScheme.primary,
                     unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
