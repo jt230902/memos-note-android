@@ -20,6 +20,10 @@ jobs:
 
       - run: yes | sdkmanager --licenses || true
 
+      # 先删除可能存在的旧密钥文件，避免 alias 已存在报错
+      - name: Clean old keystore
+        run: rm -f app/release-key.jks
+
       # 生成临时签名密钥（Release 版需要签名）
       - name: Generate signing keystore
         run: |
