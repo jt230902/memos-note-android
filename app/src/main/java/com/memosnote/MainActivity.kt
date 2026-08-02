@@ -11,6 +11,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -629,7 +630,6 @@ fun MemoInput(isDark: Boolean, onSubmit: (String) -> Unit, onFocus: () -> Unit =
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            // ✅ 直接创建颜色配置
             val textFieldColors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = MaterialTheme.colorScheme.primary,
                 unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
@@ -637,14 +637,20 @@ fun MemoInput(isDark: Boolean, onSubmit: (String) -> Unit, onFocus: () -> Unit =
                 unfocusedContainerColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.02f)
             )
 
-            // ✅ interactionSource 随主题重建，触发内部状态刷新，消除边框颜色残留
-            val interactionSource = remember(isDark) { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            val interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
             LaunchedEffect(interactionSource) {
                 interactionSource.interactions.collect { interaction ->
                     if (interaction is androidx.compose.foundation.interaction.FocusInteraction.Focus) {
                         onFocus()
                     }
                 }
+            }
+
+            // ✅ Alpha 微闪烁强制重绘：主题切换时 1f -> 0.97f -> 1f（60ms），消除边框颜色残留，不丢失焦点
+            val flashAlpha = remember { Animatable(1f) }
+            LaunchedEffect(isDark) {
+                flashAlpha.animateTo(0.97f, animationSpec = tween(30))
+                flashAlpha.animateTo(1f, animationSpec = tween(30))
             }
 
             OutlinedTextField(
@@ -661,8 +667,7 @@ fun MemoInput(isDark: Boolean, onSubmit: (String) -> Unit, onFocus: () -> Unit =
                     .fillMaxWidth()
                     .heightIn(min = 56.dp, max = 160.dp)
                     .focusRequester(focusRequester)
-                    // ✅ 强制自定义绘制，消除主题切换时的颜色残留
-                    .drawWithContent { drawContent() },
+                    .alpha(flashAlpha.value),
                 textStyle = androidx.compose.ui.text.TextStyle(
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurface
